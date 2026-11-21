@@ -9,7 +9,7 @@ export function analyzeStrictTransportSecurity(
     parsed: ParseDirective,
 ): Finding {
     
-    if (rawHeader == null) {
+    if (rawHeader == null || rawHeader.trim() === '') {
         return finding('0', 'missing', 0, 'Header missing');
     }
 
