@@ -3,6 +3,9 @@ import { Finding } from "../types";
 
 const ONE_YEAR = 3.1536e7;   //  31,536,000 seconds
 const TWO_YEARS = 6.3072e7;   //  63,072,000 seconds
+const TEN_YEARS = 10*365*86400; // 315,360,000 seconds
+const RFC_MAX_AGE = 2**31-1;  //68 years
+
 
 export function analyzeStrictTransportSecurity(
     rawHeader: string | null | undefined,
@@ -126,4 +129,80 @@ function finding(
     reason: string,
 ): Finding {
     return { id, category: 'header', kind: 'grade', status, points, reason };
+}
+
+function anomalyFinding(
+    id:string,
+    status:Finding['status'],
+    points:number,
+    reason:string
+):Finding {
+    return {id, category:'header' ,kind:'anomaly' , status , points, reason}
+}
+
+function absurdMaxAgePoints(maxAge: number):number{
+    const excess = maxAge - TEN_YEARS;
+    if(excess<=0)return 0;
+    const span = RFC_MAX_AGE - TEN_YEARS;
+    const raw = 5 + (excess/span)*5;
+    return Math.min(10 , raw);
+}
+
+export function analyzeStrictTransportAnomaly(
+    rawHeader:string | null | undefined,
+    parsed: ParseDirective
+):Finding{
+    if(rawHeader == null || rawHeader.trim()===''){
+        return anomalyFinding("hsts-0" , "informational" , 0 , "No Strict-Transport-Security header present");
+    }
+    const hasmaxAge = "max-age" in parsed;
+    const maxAge = parsed['max-age'];
+    if(!hasmaxAge){
+        return anomalyFinding(
+            "hsts-1",
+            "malformed",
+            2,
+            `Header is present (${JSON.stringify(rawHeader)}) but missing the required max-age directive; browsers ignore the whole header`
+        );
+    }
+    if(maxAge===0){
+        return anomalyFinding(
+            "hsts-2",
+            "informational",
+            0,
+            "max-age = 0 explicitly disables HSTS (configuration choice, not an anomaly)"
+        );
+    }
+   
+    if(typeof maxAge !== "number"){
+        return anomalyFinding(
+            "hsts-3",
+            "malformed",
+            10,
+            `max-age is not numeric: ${JSON.stringify(maxAge)}`
+        );
+    }
+    if(maxAge<0){
+        return anomalyFinding(
+            "hsts-4",
+            "malformed",
+            2,
+            `max-age is negative (${maxAge}); browsers clamp to 0, so this is equivalent to max-age=0`
+        );
+    }
+    if(maxAge>TEN_YEARS){
+        const pts =Math.round(absurdMaxAgePoints(maxAge));
+        return anomalyFinding(
+            "hsts-5",
+            "suspicious",
+            pts,
+            `max-age is ${maxAge} seconds (>${TEN_YEARS} = 10), which exceeds any meaningful policy and may indicate overflow or misconfiguration`
+        )
+    }
+    return anomalyFinding(
+        "hsts-6",
+        "informational",
+        0,
+        `HSTS configuration looks normal (max-age = ${maxAge}) seconds`
+    );
 }

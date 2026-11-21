@@ -21,7 +21,7 @@ export type RedirectHop = {
 
 export type FetchErrorCategory = |'invalid_url' | 'timeout'| 'network_error' | 'unknown' | 'too_many_redirects';
 
-export type FindingStatus = 'missing' | 'weak' | 'strong' | 'malformed' | 'informational';
+export type FindingStatus = 'missing' | 'weak' | 'strong' | 'malformed' | 'informational' | 'suspicious';
 
 export type Finding = {
     id: string;
